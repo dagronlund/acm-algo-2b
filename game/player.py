@@ -3,6 +3,7 @@ import networkx as nx
 import random
 from base_player import BasePlayer
 from settings import *
+import math
 
 class Player(BasePlayer):
     """
@@ -86,3 +87,22 @@ class Player(BasePlayer):
 
 
         return commands
+
+    def get_init_stations(self, state):
+        stations = 1
+        money_left = STARTING_MONEY - INIT_BUILD_COST
+
+        while money_left >= INIT_BUILD_COST * math.pow(BUILD_FACTOR, stations):
+            money_left -= INIT_BUILD_COST * math.pow(BUILD_FACTOR, stations)
+            stations += 1
+
+        return stations
+
+    def init_station_build(self, state):
+
+        while(self.get_init_stations() > 1)
+            graph_ecc = state.get_graph().eccentricity(nx)
+            diameter = state.get_graph().diameter(nx)
+            radius = state.get_graph().radius(nx)
+
+            nx.random
