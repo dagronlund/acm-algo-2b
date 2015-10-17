@@ -1,3 +1,5 @@
+import time
+import copy
 import operator
 import networkx as nx
 import random
@@ -20,19 +22,73 @@ class Player(BasePlayer):
         state : State
             The initial state of the game. See state.py for more information.
         """
-        self.built_station = False
-        centrals = nx.closeness_centrality(state.get_graph())
-        sorted_centrals = sorted(centrals.items(), key=operator.itemgetter(1))
-        self.station = sorted_centrals[-1][0]
-        self.old_pending_orders = []
 
-    # Checks if we can use a given path
-    def path_is_valid(self, state, path):
-        graph = state.get_graph()
-        for i in range(0, len(path) - 1):
-            if graph.edge[path[i]][path[i + 1]]['in_use']:
-                return False
-        return True
+        start = time.time()
+
+        # Region setup
+        g = state.get_graph()
+        regions = HUBS
+        for node in g.nodes():
+            g.node[node]['region'] = -1
+
+        # Generate n random, unique points
+        origins = []
+        for i in range(0, regions):
+            node = random.choice(g.nodes())
+            while node in origins:
+                node = random.choice(g.nodes())
+            g.node[node]['region'] = i
+            origins.append(node)
+
+        # Create initial boundary lists
+        boundaries = []
+        for i in range(0, regions):
+            boundary = [origins[i]]
+            boundaries.append(boundary)
+
+        # Grow regions
+        graph_full = False
+        while not graph_full:
+            for i in range(0, regions):
+                new_boundary = []
+                for node in boundaries[i]:
+                    # Find all neighbors not currently claimed and claim them
+                    for neighbor in [x for x in g.neighbors(node) if g.node[x]['region'] == -1]:
+                        g.node[neighbor]['region'] = i
+                        new_boundary.append(neighbor)
+                boundaries[i] = new_boundary
+            graph_full = True
+            for node in g.nodes():
+                if g.node[node]['region'] == -1:
+                    graph_full = False
+
+        # Find nodes at center of regions
+        self.stations = []
+        sorted_centers = sorted(nx.closeness_centrality(state.get_graph()).items(), key=operator.itemgetter(1))
+        self.stations.append(sorted_centers[-1][0])
+        for i in range(0, regions):
+            regional_graph = g.copy()
+            for node in regional_graph.nodes():
+                if regional_graph.node[node]['region'] != i:
+                    regional_graph.remove_node(node)
+            sorted_centers = sorted(nx.closeness_centrality(regional_graph).items(), key=operator.itemgetter(1))
+            self.stations.append(sorted_centers[-1][0])
+
+        self.constructed_stations = 0
+        self.old_pending_orders = []
+        self.expired_orders = []
+        self.built_station_one = False
+        self.built_station_two = False
+
+        print("Setup Time: ", time.time() - start)
+
+    # # Checks if we can use a given path
+    # def path_is_valid(self, state, path):
+    #     graph = state.get_graph()
+    #     for i in range(0, len(path) - 1):
+    #         if graph.edge[path[i]][path[i + 1]]['in_use']:
+    #             return False
+    #     return True
 
     def step(self, state):
         """
@@ -48,43 +104,88 @@ class Player(BasePlayer):
             self.build_command. The commands are evaluated in order.
         """
 
-        if state.over:
-            return []
+        start = time.time()
 
-        # past_orders = list(set(self.old_pending_orders) - set(state.get_active_orders()))
-        # expired_orders = []
+        # Diagnostic code
+        # active_order_nodes = [currentOrder[0] for currentOrder in state.get_active_orders()]
         # for order in self.old_pending_orders:
-        #     for currentOrder in state.get_active_orders():
-        #         if order.get_node() == currentOrder.get_node():
-        #             break
-        #     pass
-
+        #     # Forget order if it still exists
+        #     if order.get_node() in active_order_nodes:
+        #         break
+        #     # Forget order if it still had money
+        #     if state.money_from(order) - DECAY_FACTOR > 0:
+        #         break
+        #     self.expired_orders.append(order)
+        # if state.get_time() >= 999:
+        #     print("Lost Orders: ", len(self.expired_orders))
+        #     print ("Lost Cash: ", sum([order.money for order in self.expired_orders]))
+        #     for order in sorted(self.expired_orders, key=lambda x: x.node):
+        #         print(order)
+        #self.old_pending_orders = list(state.get_pending_orders())
 
         commands = []
-        if not self.built_station:
-            commands.append(self.build_command(self.station))
-            self.built_station = True
 
-        # Copy graph and remove taken nodes
+        #Build first station and then second
+        if not self.built_station_one:
+            commands.append(self.build_command(self.stations[0]))
+            self.built_station_one = True
+            self.constructed_stations = 1
+        if not self.built_station_two and state.get_money() >= 1500:
+            commands.append(self.build_command(self.stations[1]))
+            self.built_station_two = True
+            self.constructed_stations = 2
+        # if not self.built_third_station and state.get_money() >= 2250:
+        #     commands.append(self.build_command(self.stations[2]))
+        #     self.built_third_station = True
+        #     self.constructed_stations = 3
+
+        # required_money = int(1000 * pow(BUILD_FACTOR, self.constructed_stations))
+        # print(required_money)
+        # print(state.get_money())
+        # if self.constructed_stations < len(self.stations) and state.get_money() <= required_money:
+        #     commands.append(self.build_command(self.stations[self.constructed_stations]))
+        #     self.constructed_stations += 1
+
+        # Copy graph and remove edges currently being used for paths
         free_graph = state.get_graph().copy()
         for active_order in state.get_active_orders():
             active_order_nodes = active_order[1]
             for i in range(0, len(active_order_nodes) - 1):
                 free_graph.remove_edge(active_order_nodes[i], active_order_nodes[i + 1])
 
-        # Go through orders from most to least value
-        for order in reversed(sorted(state.get_pending_orders(), key=state.money_from)):
-            try:
-                path = nx.shortest_path(free_graph, self.station, order.get_node())
-                # Remove edge from free graph if path is being used
-                for i in range(0, len(path) - 1):
-                    free_graph.remove_edge(path[i], path[i + 1])
-                commands.append(self.send_command(order, path))
-            except nx.NetworkXNoPath:
-                print("Order is unreachable right now.")
+        evaluated_orders = []
+        for station in self.stations[0:self.constructed_stations]:
+            for order in state.get_pending_orders():
+                order = copy.copy(order)
+                try:
+                    order.station = station
+                    order.path = nx.shortest_path(free_graph, station, order.get_node())
+                    order.worth = state.money_from(order) - (len(order.path) * DECAY_FACTOR)
+                    evaluated_orders.append(order)
+                except nx.NetworkXNoPath:
+                    print("No path found for order from station.")
+        evaluated_orders = sorted(evaluated_orders, key=lambda x: x.worth, reverse=True)
+        print(evaluated_orders)
 
-        self.old_pending_orders = list(state.get_pending_orders())
+        while len(evaluated_orders) > 0:
+            # Remove edge from free graph and issue command
+            order = evaluated_orders[0]
+            for i in range(0, len(order.path) - 1):
+                free_graph.remove_edge(order.path[i], order.path[i + 1])
+            commands.append(self.send_command(order, order.path))
 
+            # Re-calculate worth of orders and remove impossible ones, then re-sort
+            new_evaluated_orders = []
+            for o in [x for x in evaluated_orders if x.get_node() != order.get_node()]:
+                try:
+                    o.path = nx.shortest_path(free_graph, o.station, o.get_node())
+                    o.worth = state.money_from(o) - (len(o.path) * DECAY_FACTOR)
+                    new_evaluated_orders.append(o)
+                except nx.NetworkXNoPath:
+                    print("No path found for order from station.")
+            evaluated_orders = sorted(new_evaluated_orders, key=lambda x: x.worth, reverse=True)
+
+        print("Step Time: ", time.time() - start)
 
         return commands
 

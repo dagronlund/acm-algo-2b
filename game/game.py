@@ -197,7 +197,7 @@ class Game:
     # Take the world through a time step
     def step(self):
         if self.is_over():
-            log.warning("Attempted to step after game is over")
+            #log.warning("Attempted to step after game is over")
             return
 
         log.info("~~~~~~~ TIME %04d ~~~~~~~" % self.state.get_time())
