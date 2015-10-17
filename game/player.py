@@ -27,7 +27,9 @@ class Player(BasePlayer):
 
         # Region setup
         g = state.get_graph()
-        regions = HUBS
+        regions = max(self.build_num(state), 2)
+        # regions =
+        print("regions ", regions)
         for node in g.nodes():
             g.node[node]['region'] = -1
 
@@ -79,6 +81,7 @@ class Player(BasePlayer):
         self.expired_orders = []
         self.built_station_one = False
         self.built_station_two = False
+        self.built_station_three = False
 
         print("Setup Time: ", time.time() - start)
 
@@ -126,25 +129,27 @@ class Player(BasePlayer):
         commands = []
 
         #Build first station and then second
-        if not self.built_station_one:
-            commands.append(self.build_command(self.stations[0]))
-            self.built_station_one = True
-            self.constructed_stations = 1
-        if not self.built_station_two and state.get_money() >= 1500:
-            commands.append(self.build_command(self.stations[1]))
-            self.built_station_two = True
-            self.constructed_stations = 2
-        # if not self.built_third_station and state.get_money() >= 2250:
+        # if not self.built_station_one:
+        #     commands.append(self.build_command(self.stations[0]))
+        #     self.built_station_one = True
+        #     self.constructed_stations = 1
+        # if not self.built_station_two and state.get_money() >= 1500:
+        #     commands.append(self.build_command(self.stations[1]))
+        #     self.built_station_two = True
+        #     self.constructed_stations = 2
+        # if not self.built_station_three and state.get_money() >= 2250:
         #     commands.append(self.build_command(self.stations[2]))
-        #     self.built_third_station = True
+        #     self.built_station_three = True
         #     self.constructed_stations = 3
 
-        # required_money = int(1000 * pow(BUILD_FACTOR, self.constructed_stations))
-        # print(required_money)
-        # print(state.get_money())
-        # if self.constructed_stations < len(self.stations) and state.get_money() <= required_money:
-        #     commands.append(self.build_command(self.stations[self.constructed_stations]))
-        #     self.constructed_stations += 1
+        required_money = int(1000.0 * pow(BUILD_FACTOR, self.constructed_stations))
+        print(required_money)
+        print(state.get_money())
+        print(self.constructed_stations)
+        print(len(self.stations))
+        if self.constructed_stations < len(self.stations) and state.get_money() >= required_money:
+            commands.append(self.build_command(self.stations[self.constructed_stations]))
+            self.constructed_stations += 1
 
         # Copy graph and remove edges currently being used for paths
         free_graph = state.get_graph().copy()
@@ -189,6 +194,27 @@ class Player(BasePlayer):
 
         return commands
 
+    # def get_init_stations(self, state):
+    #     stations = 1
+    #     money_left = STARTING_MONEY - INIT_BUILD_COST
+    #
+    #     while money_left >= INIT_BUILD_COST * math.pow(BUILD_FACTOR, stations):
+    #         money_left -= INIT_BUILD_COST * math.pow(BUILD_FACTOR, stations)
+    #         stations += 1
+    #
+    #     return stations
+    #
+    # def init_station_build(self, state):
+    #
+    #     while(self.get_init_stations() > 1)
+    #         graph_ecc = state.get_graph().eccentricity(nx)
+    #         diameter = state.get_graph().diameter(nx)
+    #         radius = state.get_graph().radius(nx)
+    #
+    #         nx.random
+
+    stations = 1
+
     def get_init_stations(self, state):
         stations = 1
         money_left = STARTING_MONEY - INIT_BUILD_COST
@@ -200,10 +226,16 @@ class Player(BasePlayer):
         return stations
 
     def init_station_build(self, state):
+        pass
 
-        while(self.get_init_stations() > 1)
-            graph_ecc = state.get_graph().eccentricity(nx)
-            diameter = state.get_graph().diameter(nx)
-            radius = state.get_graph().radius(nx)
+    def should_build(self, state, stn):
+        diameter = nx.diameter(state.get_graph())
+        cost_of_station = INIT_BUILD_COST * math.pow(BUILD_FACTOR, stn)
+        profit = ORDER_CHANCE * GAME_LENGTH * DECAY_FACTOR * (diameter/(4 * math.sqrt(stn)) - diameter/(4 * math.sqrt(stn + 1)))
+        return profit > cost_of_station * 2
 
-            nx.random
+    def build_num(self, state):
+        stn = 1
+        while self.should_build(state, stn):
+            stn += 1
+        return stn - 1
