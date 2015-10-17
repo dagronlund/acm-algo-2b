@@ -1,11 +1,4 @@
-4 Guys 1 Algorithm
-===================
 # acm-algo-2b
 The 2015 ACM-Algo competition submission for 2B.
 
-Drinking is fun
-
-I am a panda!!!
-
-Random Shit
-
+We **might** know how to use Git.
