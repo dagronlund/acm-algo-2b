@@ -1,3 +1,4 @@
+import operator
 import networkx as nx
 import random
 from base_player import BasePlayer
