@@ -10,9 +10,6 @@ class Player(BasePlayer):
     name or the base class.
     """
 
-    # You can set up static state here
-    has_built_station = False
-
     def __init__(self, state):
         """
         Initializes your Player. You can set up persistent state, do analysis
@@ -22,8 +19,11 @@ class Player(BasePlayer):
         state : State
             The initial state of the game. See state.py for more information.
         """
-
-        return
+        self.built_station = False
+        centrals = nx.closeness_centrality(state.get_graph())
+        sorted_centrals = sorted(centrals.items(), key=operator.itemgetter(1))
+        self.station = sorted_centrals[-1][0]
+        self.old_pending_orders = []
 
     # Checks if we can use a given path
     def path_is_valid(self, state, path):
@@ -52,24 +52,22 @@ class Player(BasePlayer):
             self.build_command. The commands are evaluated in order.
         """
 
-        # We have implemented a naive bot for you that builds a single station
-        # and tries to find the shortest path from it to first pending order.
-        # We recommend making it a bit smarter ;-)
+        if state.over:
+            return []
 
-        #print(state.money)
-
-        graph = state.get_graph()
-        #station = graph.nodes()[0]
-
+        # past_orders = list(set(self.old_pending_orders) - set(state.get_active_orders()))
+        # expired_orders = []
+        # for order in self.old_pending_orders:
+        #     for currentOrder in state.get_active_orders():
+        #         if order.get_node() == currentOrder.get_node():
+        #             break
+        #     pass
 
 
         commands = []
-        if not self.has_built_station:
-            centrals = nx.closeness_centrality(graph)
-            sorted_centrals = sorted(centrals.items(), key=operator.itemgetter(1))
-            self.station = sorted_centrals[-1][0]
+        if not self.built_station:
             commands.append(self.build_command(self.station))
-            self.has_built_station = True
+            self.built_station = True
 
         # Copy graph and remove taken nodes
         free_graph = state.get_graph().copy()
@@ -78,22 +76,17 @@ class Player(BasePlayer):
             for i in range(0, len(active_order_nodes) - 1):
                 free_graph.remove_edge(active_order_nodes[i], active_order_nodes[i + 1])
 
-        pending_orders = state.get_pending_orders()
-        print(state.get_active_orders())
+        # Go through orders from most to least value
+        for order in reversed(sorted(state.get_pending_orders(), key=state.money_from)):
+            try:
+                path = nx.shortest_path(free_graph, self.station, order.get_node())
+                # Remove edge from free graph if path is being used
+                for i in range(0, len(path) - 1):
+                    free_graph.remove_edge(path[i], path[i + 1])
+                commands.append(self.send_command(order, path))
+            except nx.NetworkXNoPath:
+                print("Order is unreachable right now.")
 
-        if len(pending_orders) != 0:
-            def sorter(x): x.money - (len(nx.shortest_path(graph, self.station, x.get_node())) * DECAY_FACTOR)
-            sorted_orders = sorted(pending_orders, key=sorter)
-
-            # Go through orders from most to least value
-            for order in reversed(sorted_orders):
-                try:
-                    path = nx.shortest_path(free_graph, self.station, order.get_node())
-                    # Remove edge from free graph if path is being used
-                    for i in range(0, len(path) - 1):
-                        free_graph.remove_edge(path[i], path[i + 1])
-                    commands.append(self.send_command(order, path))
-                except nx.NetworkXNoPath:
-                    print("Order is unreachable right now.")
+        self.old_pending_orders = list(state.get_pending_orders())
 
         return commands
