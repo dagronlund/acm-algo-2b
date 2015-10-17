@@ -1,6 +1,5 @@
 import networkx as nx
 import random
-import operator
 from base_player import BasePlayer
 from settings import *
 
@@ -32,11 +31,6 @@ class Player(BasePlayer):
             if graph.edge[path[i]][path[i + 1]]['in_use']:
                 return False
         return True
-
-    # Finds the time value of the node
-    def node_worth(self, order, path_length):
-        return order.money - (path_length * DECAY_FACTOR)
-
 
     def step(self, state):
         """
@@ -88,5 +82,6 @@ class Player(BasePlayer):
                 print("Order is unreachable right now.")
 
         self.old_pending_orders = list(state.get_pending_orders())
+
 
         return commands
